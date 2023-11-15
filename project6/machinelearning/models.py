@@ -42,16 +42,29 @@ class PerceptronModel(object):
         """
         Train the perceptron until convergence.
         """
-        batch_size = 1
-        change_flag = True
+        # batch_size = 1
+        # change_flag = True
 
-        while change_flag:
-            change_flag = False
+        # while change_flag:
+        #     change_flag = False
+        #     for x, y in dataset.iterate_once(batch_size):
+        #         result = self.get_prediction(x)
+        #         if result != nn.as_scalar(y):
+        #             self.w.update(x, nn.as_scalar(y))
+        #             change_flag = True
+
+        accuracy = 0.0
+        batch_size = 1
+        while accuracy < 1:
+            num_correct = 0
+            num_samples = 0
             for x, y in dataset.iterate_once(batch_size):
-                result = self.get_prediction(x)
-                if result != nn.as_scalar(y):
-                    self.w.update(nn.Constant(x.data), nn.as_scalar(y))
-                    change_flag = True
+                num_samples += 1
+                if self.get_prediction(x) == nn.as_scalar(y):
+                    num_correct += 1
+                else:
+                    self.w.update(x, nn.as_scalar(y))
+            accuracy = num_correct / num_samples
 
 
 class RegressionModel(object):
@@ -64,10 +77,10 @@ class RegressionModel(object):
     def __init__(self):
         # Initialize your model parameters here
         self.lr = .05
-        self.w1 = nn.Parameter(1, 128)
-        self.b1 = nn.Parameter(1, 128)
+        self.w1 = nn.Parameter(1, 512)
+        self.b1 = nn.Parameter(1, 512)
 
-        self.w2 = nn.Parameter(128, 64)
+        self.w2 = nn.Parameter(512, 64)
         self.b2 = nn.Parameter(1, 64)
 
         self.w3 = nn.Parameter(64, 1)
@@ -84,14 +97,9 @@ class RegressionModel(object):
         Returns:
             A node with shape (batch_size x 1) containing predicted y-values
         """
-        first_layer = nn.ReLU(nn.AddBias(
-            nn.Linear(x, self.w1), self.b1))
-
-        second_layer = nn.ReLU(nn.AddBias(
-            nn.Linear(first_layer, self.w2), self.b2))
-
-        output_layer = nn.AddBias(nn.Linear(
-            second_layer, self.w3), self.b3)
+        layer1 = nn.ReLU(nn.AddBias(nn.Linear(x, self.w1), self.b1))
+        layer2 = nn.ReLU(nn.AddBias(nn.Linear(layer1, self.w2), self.b2))
+        output_layer = nn.AddBias(nn.Linear(layer2, self.w3), self.b3)
 
         return output_layer
 
@@ -105,8 +113,7 @@ class RegressionModel(object):
                 to be used for training
         Returns: a loss node
         """
-        y_hat = self.run(x)
-        return nn.SquareLoss(y_hat, y)
+        return nn.SquareLoss(self.run(x), y)
 
     def train(self, dataset):
         """
@@ -114,12 +121,14 @@ class RegressionModel(object):
         """
         batch_size = 200
         loss = float('inf')
-        while loss >= .015:
+        
+        while loss >= .02:
             for x, y in dataset.iterate_once(batch_size):
-                loss = self.get_loss(x, y)
-                print(nn.as_scalar(loss))
-                grads = nn.gradients(loss, self.params)
-                loss = nn.as_scalar(loss)
+                _loss = self.get_loss(x, y)
+                loss = nn.as_scalar(_loss)
+
+                # Update parameters
+                grads = nn.gradients(_loss, self.params)
                 for i in range(len(self.params)):
                     self.params[i].update(grads[i], -self.lr)
 
@@ -240,14 +249,14 @@ class LanguageIDModel(object):
         self.lr = .1
         self.initial_w = nn.Parameter(self.num_chars, 256)
         self.initial_b = nn.Parameter(1, 256)
-        
+
         self.x_w = nn.Parameter(self.num_chars, 256)
         self.h_w = nn.Parameter(256, 256)
         self.b = nn.Parameter(1, 256)
-        
+
         self.output_w = nn.Parameter(256, len(self.languages))
         self.output_b = nn.Parameter(1, len(self.languages))
-        
+
         self.params = [self.initial_w, self.initial_b, self.x_w, self.h_w,
                        self.b, self.output_w, self.output_b]
 
@@ -280,9 +289,10 @@ class LanguageIDModel(object):
             A node with shape (batch_size x 5) containing predicted scores
                 (also called logits)
         """
-        h_i = nn.ReLU(nn.AddBias(nn.Linear(xs[0], self.initial_w), self.initial_b))
+        h_i = nn.ReLU(nn.AddBias(
+            nn.Linear(xs[0], self.initial_w), self.initial_b))
         for char in xs[1:]:
-            h_i = nn.ReLU(nn.AddBias(nn.Add(nn.Linear(char, self.x_w),\
+            h_i = nn.ReLU(nn.AddBias(nn.Add(nn.Linear(char, self.x_w),
                           nn.Linear(h_i, self.h_w)), self.b))
         output = nn.AddBias(nn.Linear(h_i, self.output_w), self.output_b)
         return output
